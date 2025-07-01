@@ -1,4 +1,4 @@
-# metavisualizer_main.py
+# m3tavizualycer.py
 
 import tkinter as tk
 from tkinter import ttk
