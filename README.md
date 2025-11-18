@@ -1,2 +1,2 @@
 # tesseract_mgr
-db managment engine 
+visualyzer managment engine for enhanced plotting 
