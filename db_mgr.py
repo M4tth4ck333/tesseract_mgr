@@ -1,11 +1,121 @@
 # db_manager_updated.py
 
 import datetime
+import json
+import ctypes
+from collections.abc import MutableMapping
+from typing import Any, List, Tuple
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import inspect
+class NodeGraphNode(MutableMapping):
+    """dict-like OOP node with JSON-path traversal and optional FFI bridge."""
 
+    def __init__(self, node_id: str, data: Any = None):
+        self.id = node_id
+        self._data = {} if data is None else data
+
+    @property
+    def data(self):
+        return self._data
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        self._data[key] = value
+
+    def __delitem__(self, key):
+        del self._data[key]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def to_dict(self):
+        return self._data
+
+    def _resolve_path(self, path: str):
+        """
+        Resolviert Pfade wie:
+          $.matrix.coordinates
+          $.matrix.quantum_state.phase
+          $.system
+        """
+        if path == "$":
+            return self._data
+
+        if path.startswith("$."):
+            path = path[2:]
+        elif path.startswith("$"):
+            path = path[1:]
+
+        current = self._data
+        for part in path.split("."):
+            if not part:
+                continue
+
+            if isinstance(current, dict):
+                if part not in current:
+                    raise KeyError(f"Pfad '{path}' nicht gefunden: {part}")
+                current = current[part]
+            elif isinstance(current, list):
+                try:
+                    idx = int(part)
+                    current = current[idx]
+                except (ValueError, IndexError):
+                    raise KeyError(f"Liste kann nicht mit '{part}' adressiert werden.")
+            else:
+                raise KeyError(f"Pfad '{path}' kann nicht weiter aufgelöst werden auf {type(current)}")
+
+        return current
+
+    def json_path_2_ffi(self, path_expr: str, ffi_func=None):
+        value = self._resolve_path(path_expr)
+
+        print(f"[FFI-Bridge] Pfad '{path_expr}' -> {value}")
+
+        if ffi_func is None:
+            return value
+
+        # Typ-zu-FFI-Umwandlung
+        if isinstance(value, (int, float)):
+            return ffi_func(ctypes.c_double(float(value)))
+        elif isinstance(value, list):
+            if not value:
+                return ffi_func(ctypes.POINTER(ctypes.c_double)())
+            arr_type = ctypes.c_double * len(value)
+            return ffi_func(arr_type(*map(float, value)))
+        elif isinstance(value, dict):
+            # JSON-Objekt -> JSON-String -> C-String
+            payload = json.dumps(value).encode("utf-8")
+            buf = ctypes.create_string_buffer(payload)
+            return ffi_func(buf)
+        else:
+            return ffi_func(ctypes.c_char_p(str(value).encode("utf-8")))
+            material_state = {
+    "system": "v1rtu4lyz1um_reaktor",
+    "matrix": {
+        "components": ["urea", "magnetitsulfonat", "mn_zitrat", "mg_ho", "iod"],
+        "coordinates": [56.0, 1.618, 3.1415],
+        "quantum_state": {"phase": 0.785, "spin": 1},
+    },
+}
+
+node = NodeGraphNode("reaktor_node_1", material_state)
+
+coords = node.json_path_2_ffi("$.matrix.coordinates")
+print("coords:", coords)
+
+def mock_native_plasma_calc(ptr):
+    print("[C-FFI Core] Empfangener Wert/Pointer verarbeitet.")
+    return f"Plasma-Leitfähigkeit moduliert: {ptr}"
+
+result = node.json_path_2_ffi("$.matrix.coordinates", ffi_func=mock_native_plasma_calc)
+print(result)
 # Basis für die deklarative Definition von Tabellen
 Base = declarative_base()
 
