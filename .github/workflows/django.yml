@@ -15,11 +15,26 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-
-    - name: PolyAPI Deployment Action (Python)
+- name: PolyAPI Deployment Action (Python)
       uses: polyapi/poly-deployment-action-py@v0.0.8
       with:
         poly_api_key: ${{ secrets.POLY_API_KEY }}
-        poly_api_base_url: ${{ secrets.POLY_API_BASE_URL }}
+        poly_api_base_url: ${{ vars.POLY_API_BASE_URL || 'https://api.polyapi.io' }}
         do_checkout: false
-        working_directory: .
+        working_directory: '.'
+- name: Upload System Artifacts (WASM & CFFI Binaries)
+  uses: actions/upload-artifact@v4
+  with:
+    name: v1rtu4lyz1um-wasm-runtime-artifacts
+    path: |
+      build/
+      *.so
+      *.wasm
+      operator_core.c
+      operator_ffi.py
+    if-no-files-found: error
+    retention-days: 30
+    compression-level: 6
+    overwrite: true
+    include-hidden-files: false
+    archive: true
